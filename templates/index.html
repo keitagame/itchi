@@ -74,7 +74,7 @@
   .btn-main { background: linear-gradient(135deg, var(--accent), #3a9fd6); color: #06202b; width: 100%; }
   .btn-sub { background: var(--panel-light); color: var(--text); }
   .row { display: flex; gap: 8px; }
-  .row input { flex: 1; margin-bottom: 0; }
+  .row input { flex: 1; min-width:75%; margin-bottom: 0; }
 
   #playersPanel ul { list-style: none; padding: 0; margin: 0; }
   #playersPanel li {
@@ -111,7 +111,7 @@
   #log div { padding: 3px 0; }
 
   #joinScreen { }
-  .hidden { display: none !important; }
+  .hidden { display:none !important; }
 
   .toast {
     position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
@@ -124,15 +124,15 @@
 </head>
 <body>
 <div class="container">
-  <h1>🎯 一致ゲーム</h1>
-  <div class="subtitle">誰かと同じ言葉を書けたらポイント！</div>
+  <h2>出来れば一致して欲しい</h2>
+  
 
   <!-- 入室画面 -->
   <div class="panel" id="joinScreen">
-    <label for="roomInput">部屋ID(合言葉)</label>
-    <input type="text" id="roomInput" placeholder="例: sample-room">
+    <label for="roomInput">部屋ID(合言葉的)</label>
+    <input type="text" id="roomInput" placeholder="なんでもかいて">
     <label for="nicknameInput">ニックネーム</label>
-    <input type="text" id="nicknameInput" placeholder="例: たろう">
+    <input type="text" id="nicknameInput" placeholder="なまえ">
     <button class="btn-main" id="joinBtn">部屋に入る</button>
   </div>
 
@@ -151,7 +151,7 @@
       <div id="topicInputArea" class="hidden">
         <label for="topicInput">お題を入力(最初の1件が採用されます)</label>
         <div class="row">
-          <input type="text" id="topicInput" placeholder="例: 好きな動物は？" maxlength="60">
+          <input type="text" id="topicInput" placeholder="例: けいたのふるねーむ" maxlength="60">
           <button class="btn-main" id="topicSendBtn">送信</button>
         </div>
       </div>
@@ -160,7 +160,7 @@
       <div id="answerInputArea" class="hidden">
         <label for="answerInput">あなたの回答</label>
         <div class="row">
-          <input type="text" id="answerInput" placeholder="他の人と一致を狙おう！" maxlength="60">
+          <input type="text" id="answerInput" placeholder="いっちをねらえ" maxlength="60">
           <button class="btn-main" id="answerSendBtn">送信</button>
         </div>
         <div id="answerSentNotice" class="hidden" style="color: var(--good); margin-top:8px;">✅ 送信済み。他の人を待っています…</div>
