@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一致ゲーム</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  :root {
+    --bg: #1b1d2b;
+    --panel: #262a3f;
+    --panel-light: #323752;
+    --accent: #5ec8f0;
+    --accent2: #f0c95e;
+    --good: #6ee7a0;
+    --bad: #f07070;
+    --text: #eef0fa;
+    --text-dim: #9aa0c0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, var(--bg), #12131c);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 12px;
+  }
+  .container { width: 100%; max-width: 640px; }
+  h1 {
+    text-align: center;
+    font-size: 1.8em;
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+    font-size: 0.9em;
+  }
+  .panel {
+    background: var(--panel);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  label { display: block; font-size: 0.85em; color: var(--text-dim); margin-bottom: 6px; }
+  input[type=text] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #454a6b;
+    background: var(--panel-light);
+    color: var(--text);
+    font-size: 1em;
+    margin-bottom: 12px;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 1em;
+    font-weight: bold;
+    transition: transform 0.1s, opacity 0.2s;
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-main { background: linear-gradient(135deg, var(--accent), #3a9fd6); color: #06202b; width: 100%; }
+  .btn-sub { background: var(--panel-light); color: var(--text); }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; margin-bottom: 0; }
+
+  #playersPanel ul { list-style: none; padding: 0; margin: 0; }
+  #playersPanel li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; border-radius: 10px; margin-bottom: 6px;
+    background: var(--panel-light);
+  }
+  .player-name { font-weight: 600; }
+  .player-name.offline { color: var(--text-dim); text-decoration: line-through; }
+  .player-score { color: var(--accent2); font-weight: bold; }
+  .badge {
+    font-size: 0.7em; padding: 2px 8px; border-radius: 20px; margin-left: 8px;
+    background: #3a3f5c; color: var(--text-dim);
+  }
+  .badge.answered { background: var(--good); color: #063; }
+
+  #statusLine { text-align: center; font-size: 1.1em; margin-bottom: 10px; min-height: 1.4em; }
+  #timerBar-outer {
+    height: 8px; background: #3a3f5c; border-radius: 6px; overflow: hidden; margin-bottom: 16px;
+  }
+  #timerBar-inner { height: 100%; background: linear-gradient(90deg, var(--good), var(--accent2), var(--bad)); width: 100%; transition: width 1s linear; }
+
+  #topicDisplay {
+    text-align: center; font-size: 1.4em; font-weight: bold; margin: 10px 0 20px;
+    color: var(--accent2);
+  }
+
+  #resultBox { background: var(--panel-light); border-radius: 10px; padding: 14px; margin-top: 10px; }
+  #resultBox h3 { margin-top: 0; }
+  .ans-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #3a3f5c; }
+  .ans-row.matched { color: var(--good); font-weight: bold; }
+
+  #log { max-height: 130px; overflow-y: auto; font-size: 0.85em; color: var(--text-dim); }
+  #log div { padding: 3px 0; }
+
+  #joinScreen { }
+  .hidden { display: none !important; }
+
+  .toast {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--bad); color: white; padding: 10px 20px; border-radius: 8px;
+    font-size: 0.9em; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 999;
+    animation: fadeOut 3s forwards;
+  }
+  @keyframes fadeOut { 0% {opacity:1;} 80% {opacity:1;} 100% {opacity:0; visibility:hidden;} }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎯 一致ゲーム</h1>
+  <div class="subtitle">誰かと同じ言葉を書けたらポイント！</div>
+
+  <!-- 入室画面 -->
+  <div class="panel" id="joinScreen">
+    <label for="roomInput">部屋ID(合言葉)</label>
+    <input type="text" id="roomInput" placeholder="例: sample-room">
+    <label for="nicknameInput">ニックネーム</label>
+    <input type="text" id="nicknameInput" placeholder="例: たろう">
+    <button class="btn-main" id="joinBtn">部屋に入る</button>
+  </div>
+
+  <!-- ゲーム画面(入室後表示) -->
+  <div id="gameScreen" class="hidden">
+
+    <div class="panel">
+      <div id="statusLine">-</div>
+      <div id="timerBar-outer" class="hidden"><div id="timerBar-inner"></div></div>
+      <div id="topicDisplay" class="hidden"></div>
+
+      <!-- ロビー用: 開始ボタン -->
+      <button class="btn-main hidden" id="startBtn">ゲーム開始</button>
+
+      <!-- お題入力用 -->
+      <div id="topicInputArea" class="hidden">
+        <label for="topicInput">お題を入力(最初の1件が採用されます)</label>
+        <div class="row">
+          <input type="text" id="topicInput" placeholder="例: 好きな動物は？" maxlength="60">
+          <button class="btn-main" id="topicSendBtn">送信</button>
+        </div>
+      </div>
+
+      <!-- 回答入力用 -->
+      <div id="answerInputArea" class="hidden">
+        <label for="answerInput">あなたの回答</label>
+        <div class="row">
+          <input type="text" id="answerInput" placeholder="他の人と一致を狙おう！" maxlength="60">
+          <button class="btn-main" id="answerSendBtn">送信</button>
+        </div>
+        <div id="answerSentNotice" class="hidden" style="color: var(--good); margin-top:8px;">✅ 送信済み。他の人を待っています…</div>
+      </div>
+
+      <!-- 結果表示用 -->
+      <div id="resultBox" class="hidden"></div>
+    </div>
+
+    <div class="panel" id="playersPanel">
+      <label>参加者 (<span id="playerCount">0</span>人)</label>
+      <ul id="playerList"></ul>
+    </div>
+
+    <div class="panel">
+      <label for="nicknameChangeInput">ニックネームを変更</label>
+      <div class="row">
+        <input type="text" id="nicknameChangeInput" placeholder="新しいニックネーム">
+        <button class="btn-sub" id="nicknameChangeBtn">変更</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <label>ログ</label>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const socket = io();
+
+let currentRoom = null;
+let myNickname = null;
+let mySid = null;
+
+const joinScreen = document.getElementById('joinScreen');
+const gameScreen = document.getElementById('gameScreen');
+const statusLine = document.getElementById('statusLine');
+const timerOuter = document.getElementById('timerBar-outer');
+const timerInner = document.getElementById('timerBar-inner');
+const topicDisplay = document.getElementById('topicDisplay');
+const startBtn = document.getElementById('startBtn');
+const topicInputArea = document.getElementById('topicInputArea');
+const topicInput = document.getElementById('topicInput');
+const topicSendBtn = document.getElementById('topicSendBtn');
+const answerInputArea = document.getElementById('answerInputArea');
+const answerInput = document.getElementById('answerInput');
+const answerSendBtn = document.getElementById('answerSendBtn');
+const answerSentNotice = document.getElementById('answerSentNotice');
+const resultBox = document.getElementById('resultBox');
+const playerList = document.getElementById('playerList');
+const playerCount = document.getElementById('playerCount');
+const logDiv = document.getElementById('log');
+
+function addLog(msg) {
+  const d = document.createElement('div');
+  const t = new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+  d.textContent = `[${t}] ${msg}`;
+  logDiv.prepend(d);
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ---------- 入室 ----------
+document.getElementById('joinBtn').addEventListener('click', () => {
+  const roomId = document.getElementById('roomInput').value.trim();
+  const nickname = document.getElementById('nicknameInput').value.trim();
+  if (!roomId) { showToast('部屋IDを入力してください'); return; }
+  currentRoom = roomId;
+  myNickname = nickname || null;
+  socket.emit('join_room_event', { room_id: roomId, nickname: nickname });
+});
+
+socket.on('joined', (data) => {
+  currentRoom = data.room_id;
+  myNickname = data.nickname;
+  mySid = socket.id;
+  joinScreen.classList.add('hidden');
+  gameScreen.classList.remove('hidden');
+  addLog(`部屋「${currentRoom}」に入室しました (${myNickname})`);
+});
+
+socket.on('error_message', (data) => showToast(data.message));
+socket.on('system_message', (data) => addLog(data.message));
+
+socket.on('connect', () => { mySid = socket.id; });
+
+// 再接続時、既に入室していたら再度join
+socket.on('connect', () => {
+  if (currentRoom && myNickname) {
+    socket.emit('join_room_event', { room_id: currentRoom, nickname: myNickname });
+  }
+});
+
+// ---------- ニックネーム変更 ----------
+document.getElementById('nicknameChangeBtn').addEventListener('click', () => {
+  const newName = document.getElementById('nicknameChangeInput').value.trim();
+  if (!newName || !currentRoom) return;
+  socket.emit('change_nickname', { room_id: currentRoom, nickname: newName });
+  myNickname = newName;
+  document.getElementById('nicknameChangeInput').value = '';
+});
+
+// ---------- ゲーム開始 ----------
+startBtn.addEventListener('click', () => {
+  socket.emit('start_game', { room_id: currentRoom });
+});
+
+// ---------- お題送信 ----------
+function sendTopic() {
+  const topic = topicInput.value.trim();
+  if (!topic) return;
+  socket.emit('submit_topic', { room_id: currentRoom, topic: topic });
+  topicInput.value = '';
+  topicInput.disabled = true;
+  topicSendBtn.disabled = true;
+}
+topicSendBtn.addEventListener('click', sendTopic);
+topicInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendTopic(); });
+
+// ---------- 回答送信 ----------
+let alreadyAnswered = false;
+function sendAnswer() {
+  const ans = answerInput.value.trim();
+  if (!ans || alreadyAnswered) return;
+  socket.emit('submit_answer', { room_id: currentRoom, answer: ans });
+  alreadyAnswered = true;
+  answerInput.disabled = true;
+  answerSendBtn.disabled = true;
+  answerSentNotice.classList.remove('hidden');
+}
+answerSendBtn.addEventListener('click', sendAnswer);
+answerInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendAnswer(); });
+
+// ---------- 状態更新の反映 ----------
+socket.on('state_update', (data) => {
+  renderPlayers(data.players);
+
+  // すべて一旦隠す
+  timerOuter.classList.add('hidden');
+  topicDisplay.classList.add('hidden');
+  startBtn.classList.add('hidden');
+  topicInputArea.classList.add('hidden');
+  answerInputArea.classList.add('hidden');
+  resultBox.classList.add('hidden');
+
+  if (data.state === 'lobby') {
+    statusLine.textContent = '待機中… メンバーが揃ったら開始しましょう';
+    startBtn.classList.remove('hidden');
+  }
+  else if (data.state === 'collecting_topic') {
+    statusLine.textContent = `第${data.round_no}ラウンド：お題を募集中です`;
+    topicInputArea.classList.remove('hidden');
+    topicInput.disabled = false;
+    topicSendBtn.disabled = false;
+    topicInput.value = '';
+  }
+  else if (data.state === 'collecting_answers') {
+    statusLine.textContent = `第${data.round_no}ラウンド：回答を入力してください`;
+    topicDisplay.textContent = `お題：${data.topic}`;
+    topicDisplay.classList.remove('hidden');
+    answerInputArea.classList.remove('hidden');
+
+    if (!alreadyAnswered) {
+      answerInput.disabled = false;
+      answerSendBtn.disabled = false;
+      answerSentNotice.classList.add('hidden');
+    }
+
+    if (data.remaining_seconds !== null && data.remaining_seconds !== undefined) {
+      timerOuter.classList.remove('hidden');
+      const pct = Math.max(0, Math.min(100, (data.remaining_seconds / 120) * 100));
+      timerInner.style.width = pct + '%';
+    }
+  }
+  else if (data.state === 'round_result') {
+    statusLine.textContent = `第${data.round_no}ラウンド 結果発表！`;
+    topicDisplay.textContent = `お題：${data.topic}`;
+    topicDisplay.classList.remove('hidden');
+    alreadyAnswered = false; // 次ラウンドに備えてリセット
+
+    if (data.last_result) {
+      renderResult(data.last_result);
+      resultBox.classList.remove('hidden');
+    }
+  }
+});
+
+function renderPlayers(players) {
+  playerCount.textContent = players.length;
+  playerList.innerHTML = '';
+  players.forEach(p => {
+    const li = document.createElement('li');
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'player-name' + (p.connected ? '' : ' offline');
+    nameSpan.textContent = p.nickname + (p.sid === mySid ? ' (あなた)' : '') + (p.connected ? '' : ' (退出)');
+
+    if (p.answered) {
+      const badge = document.createElement('span');
+      badge.className = 'badge answered';
+      badge.textContent = '回答済み';
+      nameSpan.appendChild(badge);
+    }
+
+    const scoreSpan = document.createElement('span');
+    scoreSpan.className = 'player-score';
+    scoreSpan.textContent = p.score + ' pt';
+
+    li.appendChild(nameSpan);
+    li.appendChild(scoreSpan);
+    playerList.appendChild(li);
+  });
+}
+
+function renderResult(result) {
+  const matchedSet = new Set(result.matched);
+  let html = `<h3>回答一覧</h3>`;
+  const entries = Object.entries(result.answers);
+  if (entries.length === 0) {
+    html += `<div>回答者がいませんでした。</div>`;
+  } else {
+    entries.forEach(([nickname, word]) => {
+      const isMatched = matchedSet.has(nickname);
+      html += `<div class="ans-row ${isMatched ? 'matched' : ''}">
+        <span>${escapeHtml(nickname)}${isMatched ? ' 🎉' : ''}</span>
+        <span>${escapeHtml(word)}</span>
+      </div>`;
+    });
+  }
+  if (result.matched.length > 0) {
+    html += `<p style="margin-top:10px; color: var(--good);">一致した人: ${[...new Set(result.matched)].map(escapeHtml).join(', ')} (+1pt)</p>`;
+  } else {
+    html += `<p style="margin-top:10px; color: var(--text-dim);">今回は誰も一致しませんでした…</p>`;
+  }
+  html += `<p style="margin-top:10px; font-size:0.85em; color: var(--text-dim);">まもなく次のラウンドが始まります…</p>`;
+  resultBox.innerHTML = html;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// 1秒ごとにタイマーバーを滑らかに減少させる(サーバーからの更新の間を補間)
+setInterval(() => {
+  if (!timerOuter.classList.contains('hidden')) {
+    const currentWidth = parseFloat(timerInner.style.width) || 0;
+    const newWidth = Math.max(0, currentWidth - (100 / 120));
+    timerInner.style.width = newWidth + '%';
+  }
+}, 1000);
+</script>
+</body>
+</html>
