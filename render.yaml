@@ -4,4 +4,4 @@ services:
     plan: free
     runtime: python
     buildCommand: pip install flask flask-socketio
-    startCommand: python app.py
+    startCommand: python main.py
